@@ -24,7 +24,7 @@ def get_mesh(obj):
     data = obj.to_mesh(*mesh_settings)
     bm = bmesh.new()
     bm.from_mesh(data)
-    triangulate(bm, faces=[bm.faces], quad_method=1, ngon_method=1)
+    triangulate(bm, faces=bm.faces[:], quad_method=0, ngon_method=0)
     return bm
 
 
@@ -47,54 +47,59 @@ def get_layer(GP, gdata_owner, layer_name):
     return layer
 
 
-def generate_gp3d_stroke(mesh, layer):
+def generate_gp3d_stroke(bm, layer):
     layer.show_points = True
     layer.color = (0.2, 0.90, .2)
 
-    verts = mesh.verts
-    for f in mesh.faces:
+    verts = bm.verts
+    verts.ensure_lookup_table()
+
+    for f in bm.faces:
         s = layer.frames[0].strokes.new()
         s.draw_mode = '3DSPACE'  # or '2DSPACE'
-        s.points.add(len(f.vertices))
-        for i, v in enumerate(f.vertices):
+        s.points.add(len(f.verts))
+        for i, v in enumerate(f.verts):
             p = s.points[i]
-            p.co = verts[v].co
+            p.co = verts[v.index].co
             p.pressure = 1.0
 
 
-class F2GPDispatcher(bpy.types.Operator):
+class FGPDispatcher(bpy.types.Operator):
 
     bl_label = "Short Name"
-    bl_idname = "wm.f2gp_callback"
+    bl_idname = "wm.fgp_callback"
 
     fn_name = StringProperty(default='')
     data_name = StringProperty(default='stack_data')
     layer_name = StringProperty(default='stack_layer')
 
-    def try_f2gp(self, context):
+    def do_fgp(self, context):
         obj = context.active_object
-
-        if not(obj and obj.type == 'FONT'):
+        print('gets here')
+        if not (obj and obj.type == 'FONT'):
             return
 
+        print('should be here')
         GP = bpy.data.grease_pencil
-        layer = get_layer(self.data_name, self.layer_name)
+        layer = get_layer(GP, self.data_name, self.layer_name)
         bm = get_mesh(obj)
-        generate_gp3d_stroke(GP, bm, layer)
+        generate_gp3d_stroke(bm, layer)
         bm.clear()
 
-        bpy.context.scene.grease_pencil = GP[self.data_name]
+        context.scene.grease_pencil = GP[self.data_name]
 
     def execute(self, context):
+        print('wtf!', '||', self.fn_name, '||')
         if self.fn_name == 'set_gp_from_font':
-            self.try_f2gp(context)
+            print('leaves execute')
+            self.do_fgp(context)
         return {'FINISHED'}
 
 
-class F2GPCommandPanel(bpy.types.Panel):
+class FGPCommandPanel(bpy.types.Panel):
 
     bl_label = "Convert Font To GP"
-    bl_idname = "OBJECT_PT_f2gp"
+    bl_idname = "OBJECT_PT_fgp"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOL_PROPS'
 
@@ -102,25 +107,26 @@ class F2GPCommandPanel(bpy.types.Panel):
         scn = context.scene
         layout = self.layout
 
-        row = layout.row()
-        row.prop(scn, 'f2gp_data_name')
-        row.prop(scn, 'f2gp_layer_name')
+        col = layout.column()
+        col.prop(scn, 'fgp_data_name')
+        col.prop(scn, 'fgp_layer_name')
 
         row = layout.row()
-        maker = row.operator("wm.f2gp_callback", text='make gp')
-        maker.data_name = scn.f2gp_data_name
-        maker.layer_name = scn.f2gp_layer_name
+        maker = row.operator("wm.fgp_callback", text='make gp')
+        maker.fn_name = 'set_gp_from_font'
+        maker.data_name = scn.fgp_data_name
+        maker.layer_name = scn.fgp_layer_name
 
 
 def register():
     scn = bpy.types.Scene
-    scn.f2gp_data_name = StringProperty(default='stack_data')
-    scn.f2gp_layer_name = StringProperty(default='stack_layer')
+    scn.fgp_data_name = StringProperty(default='stack_data')
+    scn.fgp_layer_name = StringProperty(default='stack_layer')
     bpy.utils.register_module(__name__)
 
 
 def unregister():
     bpy.utils.unregister_module(__name__)
     scn = bpy.types.Scene
-    del scn.f2gp_data_name
-    del scn.f2gp_layer_name
+    del scn.fgp_data_name
+    del scn.fgp_layer_name
