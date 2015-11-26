@@ -1,5 +1,8 @@
 import bpy
+import bmesh
 from bpy.props import StringProperty
+
+triangulate = bmesh.ops.triangulate
 
 
 bl_info = {
@@ -14,6 +17,15 @@ bl_info = {
     "tracker_url": "",
     "category": "3D View"
 }
+
+
+def get_mesh(obj):
+    mesh_settings = (bpy.context.scene, False, 'PREVIEW')
+    data = obj.to_mesh(*mesh_settings)
+    bm = bmesh.new()
+    bm.from_mesh(data)
+    triangulate(bm, faces=[bm.faces], quad_method=1, ngon_method=1)
+    return bm
 
 
 def get_layer(GP, gdata_owner, layer_name):
@@ -39,8 +51,8 @@ def generate_gp3d_stroke(mesh, layer):
     layer.show_points = True
     layer.color = (0.2, 0.90, .2)
 
-    verts = mesh.vertices
-    for f in mesh.polygons:
+    verts = mesh.verts
+    for f in mesh.faces:
         s = layer.frames[0].strokes.new()
         s.draw_mode = '3DSPACE'  # or '2DSPACE'
         s.points.add(len(f.vertices))
@@ -59,12 +71,23 @@ class F2GPDispatcher(bpy.types.Operator):
     data_name = StringProperty(default='stack_data')
     layer_name = StringProperty(default='stack_layer')
 
+    def try_f2gp(self, context):
+        obj = context.active_object
+
+        if not(obj and obj.type == 'FONT'):
+            return
+
+        GP = bpy.data.grease_pencil
+        layer = get_layer(self.data_name, self.layer_name)
+        bm = get_mesh(obj)
+        generate_gp3d_stroke(GP, bm, layer)
+        bm.clear()
+
+        bpy.context.scene.grease_pencil = GP[self.data_name]
+
     def execute(self, context):
         if self.fn_name == 'set_gp_from_font':
-            GP = bpy.data.grease_pencil
-            layer = get_layer(self.data_name, self.layer_name)
-            generate_gp3d_stroke(GP, mesh, layer)
-            bpy.context.scene.grease_pencil = GP[self.data_name]
+            self.try_f2gp(context)
         return {'FINISHED'}
 
 
@@ -72,7 +95,7 @@ class F2GPCommandPanel(bpy.types.Panel):
 
     bl_label = "Convert Font To GP"
     bl_idname = "OBJECT_PT_f2gp"
-    bl_space_type = '3DVIEW'
+    bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOL_PROPS'
 
     def draw(self, context):
@@ -84,7 +107,7 @@ class F2GPCommandPanel(bpy.types.Panel):
         row.prop(scn, 'f2gp_layer_name')
 
         row = layout.row()
-        maker = row.operator("mesh.primitive_cube_add", text='make gp')
+        maker = row.operator("wm.f2gp_callback", text='make gp')
         maker.data_name = scn.f2gp_data_name
         maker.layer_name = scn.f2gp_layer_name
 
