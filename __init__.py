@@ -75,11 +75,9 @@ class FGPDispatcher(bpy.types.Operator):
 
     def do_fgp(self, context):
         obj = context.active_object
-        print('gets here')
         if not (obj and obj.type == 'FONT'):
             return
 
-        print('should be here')
         GP = bpy.data.grease_pencil
         layer = get_layer(GP, self.data_name, self.layer_name)
         bm = get_mesh(obj)
@@ -89,9 +87,7 @@ class FGPDispatcher(bpy.types.Operator):
         context.scene.grease_pencil = GP[self.data_name]
 
     def execute(self, context):
-        print('wtf!', '||', self.fn_name, '||')
         if self.fn_name == 'set_gp_from_font':
-            print('leaves execute')
             self.do_fgp(context)
         return {'FINISHED'}
 
